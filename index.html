@@ -82,7 +82,7 @@
 
   <p class="aviso">
     Toque em abrir câmera e aponte para o código de barras.
-    Após a leitura, a consulta do produto será aberta automaticamente.
+    Após a leitura válida, a consulta será aberta automaticamente.
   </p>
 
   <button class="abrir" onclick="abrirCamera()">
@@ -104,6 +104,7 @@
   <h3>Digitar código manualmente</h3>
 
   <input id="codigo" inputmode="numeric"
+         autocomplete="off"
          placeholder="Digite o código de barras">
 
   <button class="manual" onclick="enviarCodigo()">
@@ -112,28 +113,44 @@
 </div>
 
 <script>
-  // Aplicativo de consulta existente
   const URL_CONSULTA =
     "https://script.google.com/macros/s/AKfycbwwmIhIBgcwh8LKXpjQCyvCGcgSNz2mkgbdLScCfJpHRSNRxItEfL_tnLguKgtExNDxtw/exec";
 
   let leitor = null;
   let processando = false;
+  let iniciando = false;
 
   function mensagem(texto) {
     document.getElementById("mensagem").textContent = texto;
   }
 
+  // Confere se um código EAN-13 tem 13 dígitos
+  // e se o dígito verificador está correto.
+  function ean13Valido(codigo) {
+    if (!/^\d{13}$/.test(codigo)) return false;
+
+    let soma = 0;
+
+    for (let i = 0; i < 12; i++) {
+      soma += Number(codigo[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+
+    const verificador = (10 - (soma % 10)) % 10;
+
+    return verificador === Number(codigo[12]);
+  }
+
   async function abrirCamera() {
-    if (processando) return;
+    if (processando || iniciando) return;
 
     if (typeof Html5Qrcode === "undefined") {
-      mensagem("Não foi possível carregar o leitor. Verifique a internet e recarregue a página.");
+      mensagem("O leitor não carregou. Verifique a internet e recarregue a página.");
       return;
     }
 
-    try {
-      processando = false;
+    iniciando = true;
 
+    try {
       if (!leitor) {
         leitor = new Html5Qrcode("leitor");
       }
@@ -144,12 +161,22 @@
         { facingMode: "environment" },
         {
           fps: 10,
+
+          // Área mais baixa e larga para facilitar
+          // a leitura horizontal de códigos de barras.
           qrbox: function(largura, altura) {
             return {
-              width: Math.floor(largura * 0.85),
-              height: Math.min(130, Math.floor(altura * 0.5))
+              width: Math.min(
+                Math.floor(largura * 0.95),
+                400
+              ),
+              height: Math.min(
+                Math.floor(altura * 0.35),
+                120
+              )
             };
           },
+
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
@@ -159,31 +186,56 @@
             Html5QrcodeSupportedFormats.CODE_39
           ]
         },
-        function(codigoLido) {
+
+        async function(codigoLido) {
           if (processando) return;
+
+          // Remove espaços externos; não modifica os dígitos.
+          const codigo = String(codigoLido).trim();
+
+          // Este produto usa EAN-13. Não aceitar uma leitura
+          // incompleta como se fosse o código correto.
+          if (/^\d{13}$/.test(codigo) && !ean13Valido(codigo)) {
+            mensagem(
+              "Leitura incompleta ou inválida. Mantenha o código inteiro visível e tente novamente."
+            );
+            return;
+          }
+
+          // Se a leitura for um código numérico com 12 dígitos,
+          // não acrescenta dígitos nem consulta automaticamente.
+          if (/^\d{12}$/.test(codigo)) {
+            mensagem(
+              "Foram lidos apenas 12 dígitos. Ajuste a posição da câmera e tente novamente."
+            );
+            return;
+          }
+
           processando = true;
+          document.getElementById("codigo").value = codigo;
+          mensagem("Código lido: " + codigo + ". Abrindo consulta...");
 
-          document.getElementById("codigo").value = codigoLido;
-          mensagem("Código lido: " + codigoLido + ". Abrindo consulta...");
+          await pararCamera();
 
-          pararCamera().then(function() {
-            window.location.href =
-              URL_CONSULTA + "?codigo=" +
-              encodeURIComponent(codigoLido);
-          });
+          window.location.href =
+            URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
         },
+
         function() {
-          // Continua procurando o código.
+          // Erros de leitura durante a procura são normais.
         }
       );
 
-      mensagem("Câmera ativa. Aponte para o código de barras.");
+      mensagem("Câmera ativa. Enquadre todo o código de barras.");
 
     } catch (erro) {
-      processando = false;
-      mensagem("Não foi possível abrir a câmera: " +
+      mensagem(
+        "Não foi possível abrir a câmera: " +
         (erro.message || erro) +
-        ". Verifique as permissões do navegador.");
+        ". Verifique as permissões do navegador."
+      );
+    } finally {
+      iniciando = false;
     }
   }
 
@@ -205,6 +257,7 @@
       return;
     }
 
+    // A digitação manual continua funcionando normalmente.
     window.location.href =
       URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
   }
