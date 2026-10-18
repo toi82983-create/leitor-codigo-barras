@@ -1,0 +1,213 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leitor de Produtos</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #ECEFF1;
+      margin: 0;
+      padding: 18px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px #0002;
+    }
+
+    h2 {
+      text-align: center;
+      color: #1565C0;
+    }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      margin-top: 12px;
+      border: 0;
+      border-radius: 7px;
+      font-size: 17px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .abrir { background: #2E7D32; }
+    .parar { background: #C62828; }
+    .manual { background: #1976D2; }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      font-size: 20px;
+      margin-top: 12px;
+      border: 1px solid #bbb;
+      border-radius: 7px;
+    }
+
+    #leitor {
+      margin-top: 18px;
+      width: 100%;
+    }
+
+    #mensagem {
+      text-align: center;
+      margin-top: 15px;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+    }
+
+    .aviso {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <h2>📦 Leitor de Produtos</h2>
+
+  <p class="aviso">
+    Toque em abrir câmera e aponte para o código de barras.
+    Após a leitura, a consulta do produto será aberta automaticamente.
+  </p>
+
+  <button class="abrir" onclick="abrirCamera()">
+    📷 BIPAR PRODUTO
+  </button>
+
+  <button class="parar" onclick="pararCamera()">
+    ⛔ PARAR CÂMERA
+  </button>
+
+  <div id="leitor"></div>
+
+  <div id="mensagem" aria-live="polite">
+    Câmera desligada.
+  </div>
+
+  <hr>
+
+  <h3>Digitar código manualmente</h3>
+
+  <input id="codigo" inputmode="numeric"
+         placeholder="Digite o código de barras">
+
+  <button class="manual" onclick="enviarCodigo()">
+    🔍 CONSULTAR PRODUTO
+  </button>
+</div>
+
+<script>
+  // Aplicativo de consulta existente
+  const URL_CONSULTA =
+    "https://script.google.com/macros/s/AKfycbwwmIhIBgcwh8LKXpjQCyvCGcgSNz2mkgbdLScCfJpHRSNRxItEfL_tnLguKgtExNDxtw/exec";
+
+  let leitor = null;
+  let processando = false;
+
+  function mensagem(texto) {
+    document.getElementById("mensagem").textContent = texto;
+  }
+
+  async function abrirCamera() {
+    if (processando) return;
+
+    if (typeof Html5Qrcode === "undefined") {
+      mensagem("Não foi possível carregar o leitor. Verifique a internet e recarregue a página.");
+      return;
+    }
+
+    try {
+      processando = false;
+
+      if (!leitor) {
+        leitor = new Html5Qrcode("leitor");
+      }
+
+      mensagem("Solicitando acesso à câmera...");
+
+      await leitor.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: function(largura, altura) {
+            return {
+              width: Math.floor(largura * 0.85),
+              height: Math.min(130, Math.floor(altura * 0.5))
+            };
+          },
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39
+          ]
+        },
+        function(codigoLido) {
+          if (processando) return;
+          processando = true;
+
+          document.getElementById("codigo").value = codigoLido;
+          mensagem("Código lido: " + codigoLido + ". Abrindo consulta...");
+
+          pararCamera().then(function() {
+            window.location.href =
+              URL_CONSULTA + "?codigo=" +
+              encodeURIComponent(codigoLido);
+          });
+        },
+        function() {
+          // Continua procurando o código.
+        }
+      );
+
+      mensagem("Câmera ativa. Aponte para o código de barras.");
+
+    } catch (erro) {
+      processando = false;
+      mensagem("Não foi possível abrir a câmera: " +
+        (erro.message || erro) +
+        ". Verifique as permissões do navegador.");
+    }
+  }
+
+  async function pararCamera() {
+    if (leitor && leitor.isScanning) {
+      try {
+        await leitor.stop();
+      } catch (erro) {
+        console.log(erro);
+      }
+    }
+  }
+
+  function enviarCodigo() {
+    const codigo = document.getElementById("codigo").value.trim();
+
+    if (!codigo) {
+      mensagem("Digite um código de barras.");
+      return;
+    }
+
+    window.location.href =
+      URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
+  }
+</script>
+</body>
+</html>
