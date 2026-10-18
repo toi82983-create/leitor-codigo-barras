@@ -2,83 +2,58 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Leitor de Produtos</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leitor de Produtos</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
 
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      font-family: Arial, sans-serif;
-      background: #ECEFF1;
-      margin: 0;
-      padding: 18px;
-    }
-
-    .container {
-      max-width: 500px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 2px 12px #0002;
-    }
-
-    h2 {
-      text-align: center;
-      color: #1565C0;
-    }
-
-    button {
-      width: 100%;
-      padding: 15px;
-      margin-top: 12px;
-      border: 0;
-      border-radius: 7px;
-      font-size: 17px;
-      color: white;
-      cursor: pointer;
-    }
-
-    .abrir { background: #2E7D32; }
-    .parar { background: #C62828; }
-    .manual { background: #1976D2; }
-
-    input {
-      width: 100%;
-      padding: 14px;
-      font-size: 20px;
-      margin-top: 12px;
-      border: 1px solid #bbb;
-      border-radius: 7px;
-    }
-
-    #leitor {
-      margin-top: 18px;
-      width: 100%;
-      overflow: hidden;
-    }
-
-    #leitor video {
-      width: 100%;
-      max-height: 350px;
-      object-fit: contain;
-    }
-
-    #mensagem {
-      text-align: center;
-      margin-top: 15px;
-      overflow-wrap: anywhere;
-      line-height: 1.5;
-    }
-
-    .aviso {
-      font-size: 14px;
-      color: #555;
-      line-height: 1.5;
-    }
-  </style>
+<style>
+* { box-sizing: border-box; }
+body {
+  font-family: Arial, sans-serif;
+  background: #ECEFF1;
+  margin: 0;
+  padding: 18px;
+}
+.container {
+  max-width: 500px;
+  margin: auto;
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px #0002;
+}
+h2 { text-align: center; color: #1565C0; }
+button {
+  width: 100%;
+  padding: 15px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 17px;
+  color: white;
+  cursor: pointer;
+}
+.abrir { background: #2E7D32; }
+.parar { background: #C62828; }
+.manual { background: #1976D2; }
+input {
+  width: 100%;
+  padding: 14px;
+  font-size: 20px;
+  margin-top: 12px;
+  border: 1px solid #bbb;
+  border-radius: 7px;
+}
+#leitor { margin-top: 18px; width: 100%; }
+#mensagem {
+  text-align: center;
+  margin-top: 15px;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.aviso { font-size: 14px; color: #555; line-height: 1.5; }
+</style>
 </head>
 
 <body>
@@ -86,190 +61,141 @@
   <h2>📦 Leitor de Produtos</h2>
 
   <p class="aviso">
-    Toque em BIPAR PRODUTO e enquadre todo o código de barras.
-    A consulta será aberta após uma leitura válida.
+    Toque em BIPAR PRODUTO e aponte a câmera para todo o código de barras.
   </p>
 
-  <button class="abrir" onclick="abrirCamera()">
-    📷 BIPAR PRODUTO
-  </button>
-
-  <button class="parar" onclick="pararCamera()">
-    ⛔ PARAR CÂMERA
-  </button>
+  <button class="abrir" onclick="abrirCamera()">📷 BIPAR PRODUTO</button>
+  <button class="parar" onclick="pararCamera()">⛔ PARAR CÂMERA</button>
 
   <div id="leitor"></div>
-
-  <div id="mensagem" aria-live="polite">
-    Câmera desligada.
-  </div>
+  <div id="mensagem" aria-live="polite">Câmera desligada.</div>
 
   <hr>
-
   <h3>Digitar código manualmente</h3>
 
-  <input
-    id="codigo"
-    inputmode="numeric"
-    autocomplete="off"
-    placeholder="Digite o código de barras">
+  <input id="codigo" inputmode="numeric"
+         autocomplete="off" placeholder="Digite o código de barras">
 
-  <button class="manual" onclick="enviarCodigo()">
-    🔍 CONSULTAR PRODUTO
-  </button>
+  <button class="manual" onclick="enviarCodigo()">🔍 CONSULTAR PRODUTO</button>
 </div>
 
-<script type="module">
-  import {
-    BrowserMultiFormatReader,
-    BarcodeFormat,
-    DecodeHintType
-  } from "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/+esm";
+<script>
+const URL_CONSULTA =
+"https://script.google.com/macros/s/AKfycbwwmIhIBgcwh8LKXpjQCyvCGcgSNz2mkgbdLScCfJpHRSNRxItEfL_tnLguKgtExNDxtw/exec";
 
-  const URL_CONSULTA =
-    "https://script.google.com/macros/s/AKfycbwwmIhIBgcwh8LKXpjQCyvCGcgSNz2mkgbdLScCfJpHRSNRxItEfL_tnLguKgtExNDxtw/exec";
+let leitor = null;
+let processando = false;
+let iniciando = false;
 
-  const mensagemEl = document.getElementById("mensagem");
-  const codigoEl = document.getElementById("codigo");
+function mensagem(texto) {
+  document.getElementById("mensagem").textContent = texto;
+}
 
-  let leitor = null;
-  let controles = null;
-  let processando = false;
-  let cameraAtiva = false;
+function ean13Valido(codigo) {
+  if (!/^\d{13}$/.test(codigo)) return false;
+  let soma = 0;
 
-  function mensagem(texto) {
-    mensagemEl.textContent = texto;
+  for (let i = 0; i < 12; i++) {
+    soma += Number(codigo[i]) * (i % 2 === 0 ? 1 : 3);
   }
 
-  function ean13Valido(codigo) {
-    if (!/^\d{13}$/.test(codigo)) return false;
+  return ((10 - soma % 10) % 10) === Number(codigo[12]);
+}
 
-    let soma = 0;
+async function abrirCamera() {
+  if (processando || iniciando) return;
 
-    for (let i = 0; i < 12; i++) {
-      soma += Number(codigo[i]) * (i % 2 === 0 ? 1 : 3);
-    }
-
-    return ((10 - soma % 10) % 10) === Number(codigo[12]);
+  if (typeof Html5Qrcode === "undefined") {
+    mensagem("O leitor não carregou. Verifique a internet e atualize a página.");
+    return;
   }
 
-  async function carregarLeitor() {
-    if (leitor) return leitor;
+  iniciando = true;
 
-    const hints = new Map();
+  try {
+    if (!leitor) leitor = new Html5Qrcode("leitor");
 
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39
-    ]);
+    mensagem("Solicitando acesso à câmera...");
 
-    leitor = new BrowserMultiFormatReader(hints, 250);
-    return leitor;
-  }
-
-  window.abrirCamera = async function() {
-    if (cameraAtiva || processando) return;
-
-    try {
-      mensagem("Preparando leitor de código de barras...");
-
-      await carregarLeitor();
-
-      cameraAtiva = true;
-
-      controles = await leitor.decodeFromConstraints(
-        {
-          audio: false,
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
+    await leitor.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: function(largura, altura) {
+          return {
+            width: Math.min(Math.floor(largura * 0.95), 400),
+            height: Math.min(Math.floor(altura * 0.35), 120)
+          };
         },
-        "leitor",
-        (resultado, erro, control) => {
-          if (!resultado || processando) return;
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39
+        ]
+      },
+      async function(codigoLido) {
+        if (processando) return;
 
-          const codigo = String(resultado.getText()).trim();
-          const formato = resultado.getBarcodeFormat();
+        const codigo = String(codigoLido).trim();
 
-          // Para EAN-13, exige 13 dígitos e verificador correto.
-          if (formato === BarcodeFormat.EAN_13) {
-            if (!ean13Valido(codigo)) {
-              mensagem(
-                "Leitura incompleta ou inválida. Enquadre todo o código e tente novamente."
-              );
-              return;
-            }
-          }
-
-          // Não aceitar como EAN-13 uma leitura numérica
-          // de apenas 12 dígitos.
-          if (/^\d{12}$/.test(codigo)) {
-            mensagem(
-              "Foram lidos apenas 12 dígitos. Ajuste a câmera e tente novamente."
-            );
-            return;
-          }
-
-          processando = true;
-          codigoEl.value = codigo;
-
-          mensagem("Código lido: " + codigo + ". Abrindo consulta...");
-
-          pararCamera().finally(() => {
-            window.location.href =
-              URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
-          });
+        // Não consulta EAN-13 incompleto ou com verificador inválido.
+        if (/^\d{12}$/.test(codigo)) {
+          mensagem("Leitura incompleta: foram lidos 12 dígitos. Centralize todo o código e tente novamente.");
+          return;
         }
-      );
 
-      mensagem("Câmera ativa. Enquadre todo o código de barras.");
+        if (/^\d{13}$/.test(codigo) && !ean13Valido(codigo)) {
+          mensagem("Código EAN-13 inválido. Ajuste o foco e tente novamente.");
+          return;
+        }
 
-    } catch (erro) {
-      cameraAtiva = false;
+        processando = true;
+        document.getElementById("codigo").value = codigo;
+        mensagem("Código lido: " + codigo + ". Abrindo consulta...");
 
-      mensagem(
-        "Não foi possível abrir a câmera. Verifique a permissão e tente novamente. " +
-        (erro.message || "")
-      );
-    }
-  };
+        await pararCamera();
 
-  window.pararCamera = async function() {
-    cameraAtiva = false;
+        window.location.href =
+          URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
+      },
+      function() {
+        // Continua procurando o código.
+      }
+    );
 
+    mensagem("Câmera ativa. Enquadre todo o código de barras.");
+
+  } catch (erro) {
+    mensagem("Não foi possível abrir a câmera. Verifique a permissão do navegador e tente novamente. Detalhe: " + (erro.message || erro));
+  } finally {
+    iniciando = false;
+  }
+}
+
+async function pararCamera() {
+  if (leitor && leitor.isScanning) {
     try {
-      if (controles) {
-        controles.stop();
-        controles = null;
-      }
-
-      if (leitor) {
-        leitor.reset();
-      }
-
-      mensagem("Câmera desligada.");
+      await leitor.stop();
     } catch (erro) {
       console.log(erro);
     }
-  };
+  }
+}
 
-  window.enviarCodigo = function() {
-    const codigo = codigoEl.value.trim();
+function enviarCodigo() {
+  const codigo = document.getElementById("codigo").value.trim();
 
-    if (!codigo) {
-      mensagem("Digite um código de barras.");
-      return;
-    }
+  if (!codigo) {
+    mensagem("Digite um código de barras.");
+    return;
+  }
 
-    window.location.href =
-      URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
-  };
+  window.location.href =
+    URL_CONSULTA + "?codigo=" + encodeURIComponent(codigo);
+}
 </script>
 </body>
 </html>
